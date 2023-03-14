@@ -5,7 +5,7 @@ import configparser
 import asyncio
 import sqlite3
 
-# set up the use of a config.ini file to store some bits of information
+# sets up the use of a config.ini file to store some bits of information
 config = configparser.ConfigParser()
 config.read('config.ini')
 TOKEN = config.get('keys', 'token')
@@ -89,7 +89,7 @@ async def balance(ctx):
         await ctx.send("It seems you haven't opted in just yet. You can do this with the 'econ.optin' command.")
         print("Balance check denied, player has not opted in.")
 
-# removes the player from the game. all data in the database under the user id is deleted
+# opts the player out of the game. the player cannot participate, until they opt in again
 @bot.command()
 async def optout(ctx):
     author = ctx.message.author
@@ -110,9 +110,9 @@ async def optout(ctx):
         print(f'User removed.')
         await ctx.send("Sorry to see you go. You can start playing again at any time with the econ.optin command. Your game data has been deleted.")
 
-# testing command used to delete all data from the player
+# command used to delete all the user data of a specified player
 @bot.command()
-async def deleteeverything(ctx):
+async def deleteeverything(ctx, user_id: int):
     author = ctx.message.author
     author_id = str(author.id)
     section = 'admins'
@@ -123,11 +123,12 @@ async def deleteeverything(ctx):
 
     for key, value in config.items(section):
         if str(value) == author_id:
-            cursor.execute("DELETE FROM econ_stats WHERE user_id=?", (author_id,))
-            cursor.execute("DELETE FROM rep_stats WHERE user_id=?", (author_id,))
-            cursor.execute("DELETE FROM players WHERE user_id = ?", (author_id,))
+            cursor.execute("DELETE FROM econ_stats WHERE user_id=?", (user_id,))
+            cursor.execute("DELETE FROM rep_stats WHERE user_id=?", (user_id,))
+            cursor.execute("DELETE FROM players WHERE user_id = ?", (user_id,))
             savedata.commit()
-            print(f"The complete data for {author} was deleted.")
+            print(f"The complete data for user: {user_id} was deleted.")
+            await ctx.send("Removal request complete. All user data and history has been removed.")
 
         else:
             await ctx.send("You don't have the required permissions for this command. Get in touch with the administrators for further assistance.")
