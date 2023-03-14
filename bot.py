@@ -30,9 +30,10 @@ async def hello(ctx):
     await ctx.send('Hello!')
 
 # check for the required tables in the database
-savedata.execute('''CREATE TABLE IF NOT EXISTS players (user_id TEXT PRIMARY KEY, status TEXT)''')
-savedata.execute('''CREATE TABLE IF NOT EXISTS econ_stats (user_id TEXT PRIMARY KEY, balance TEXT)''')
-savedata.execute('''CREATE TABLE IF NOT EXISTS rep_stats (user_id TEXT PRIMARY KEY, reputation TEXT)''')
+with savedata:
+    savedata.execute('''CREATE TABLE IF NOT EXISTS players (user_id TEXT PRIMARY KEY, status TEXT)''')
+    savedata.execute('''CREATE TABLE IF NOT EXISTS econ_stats (user_id TEXT PRIMARY KEY, balance TEXT)''')
+    savedata.execute('''CREATE TABLE IF NOT EXISTS rep_stats (user_id TEXT PRIMARY KEY, reputation TEXT)''')
 
 # optin allows players to join the game. automatically checks the database for the user
 @bot.command()
@@ -109,6 +110,21 @@ async def optout(ctx):
         savedata.commit()
         print(f'User removed.')
         await ctx.send("Sorry to see you go. You can start playing again at any time with the econ.optin command. Your game data has been deleted.")
+
+# trading - allows users to trade coins amongst each other
+# @bot.command()
+# async def trade(ctx, username):
+#    sender = ctx.message.author
+#    receiver = discord.utils.get(client.users, name=username)
+#
+#    if receiver is None:
+#        await ctx.send("No user found with this username. Try again.")
+#    else:
+#        cursor = savedata.cursor()
+
+
+
+
 
 # command used to delete all the user data of a specified player
 @bot.command()
