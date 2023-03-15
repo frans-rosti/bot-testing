@@ -1,6 +1,7 @@
 import os
 import discord
 from discord.ext import commands
+from discord.utils import get
 import configparser
 import asyncio
 import sqlite3
@@ -17,6 +18,8 @@ savedata = sqlite3.connect('savedata.db')
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
+intents.members = True
+intents.presences = True
 bot = commands.Bot(command_prefix='econ.', intents=intents)
 
 # successful bot log in check
@@ -36,28 +39,40 @@ with savedata:
     savedata.execute('''CREATE TABLE IF NOT EXISTS rep_stats (user_id TEXT PRIMARY KEY, reputation TEXT)''')
 
 # balance check function
-async def balance_check(player: int):
+async def balance_check(player):
     cursor = savedata.cursor()
     cursor.execute("SELECT balance FROM econ_stats WHERE user_id=?", (player,))
-    balance = int(cursor.fetchone()[0])
-    return balance
+    balance = cursor.fetchone()
+    if balance:
+        return balance[0]
+    else:
+        return False
+
+# check user status
+async def status_check(player):
+    cursor = savedata.cursor()
+    cursor.execute("SELECT status FROM players WHERE user_id=?", (player,))
+    status = cursor.fetchone()
+
+    if not status:
+        status_check = 'fail'
+    elif status and status[0] == 'out':
+        status_check = 'out'
+    else: 
+        status_check = 'in'
+
+    return status_check
 
 # optin allows players to join the game. automatically checks the database for the user
 @bot.command()
 async def optin(ctx):
     author = ctx.message.author
     author_id = str(author.id)
-
     cursor = savedata.cursor()
 
-    query = '''
-        SELECT user_id, status FROM players WHERE user_id = ?
-    '''
-    cursor.execute(query, (author_id,))
+    player_status = await status_check(author_id)
 
-    name_status = cursor.fetchall()
-
-    if not name_status:
+    if player_status == 'fail':
         starting_cash = 1000
         starting_rep = 0
         savedata.execute('INSERT INTO econ_stats (user_id, balance) VALUES (?, ?)', (author_id, starting_cash))
@@ -67,7 +82,7 @@ async def optin(ctx):
         print(f'User was added:\nUsername: {author}\nID: {author_id}')
         await ctx.send(f'Welcome to the System! Your complementary coins have been automatically deposited to your account.\nYou can check your balance at any time with the "econ.balance" command.')
 
-    elif name_status and name_status[0][1] == "out":
+    elif player_status == 'out':
         return_cash = 500
         return_rep = -10
         savedata.execute('INSERT INTO econ_stats (user_id, balance) VALUES (?, ?)', (author_id, return_cash))
@@ -76,7 +91,7 @@ async def optin(ctx):
         savedata.commit()
         await ctx.send('Welcome back! The System missed you. You have been given some coins to welcome your return.')
 
-    elif name_status and name_status[0][1] == "in":
+    elif player_status == 'in':
         await ctx.send('You are already in.')
 
 # allows the user to check the database for their current coin balance
@@ -85,11 +100,12 @@ async def balance(ctx):
     author = ctx.message.author
     author_id = str(author.id)
 
-    player_balance = balance_check(author_id)
+    player_status = await status_check(author_id)
 
-    if balance:
-        await ctx.send(f'Your balance is: {balance} Coins.')
-        print(f'Balance check: {author} = {balance}.')
+    if player_status == 'in':
+        player_balance = await balance_check(author_id)
+        await ctx.send(f'Your balance is: {player_balance} Coins.')
+        print(f'Balance check: {author} = {player_balance}.')
     else:
         await ctx.send("It seems you haven't opted in just yet. You can do this with the 'econ.optin' command.")
         print("Balance check denied, player has not opted in.")
@@ -101,11 +117,12 @@ async def optout(ctx):
     author_id = str(author.id)
 
     cursor = savedata.cursor()
-    cursor.execute("SELECT user_id FROM players WHERE user_id=?", (author_id,))
-    name_check = cursor.fetchone()
+    player_status = await status_check(author_id)
 
-    if name_check is None:
+    if player_status == 'fail':
         await ctx.send("You can't opt out, you haven't even started! Use 'econ.optin' to start playing.")
+    elif player_status == 'out':
+        await ctx.send("You've already opted out.")
     else:
         print(f'Opt out request:\nUser: {author}\nID: {author_id}')
         cursor.execute("DELETE FROM econ_stats WHERE user_id=?", (author_id,))
@@ -118,26 +135,33 @@ async def optout(ctx):
 # trading - allows users to trade coins amongst each other
 @bot.command()
 async def trade(ctx, username, amount: int):
+    client = discord.Client(intents=intents)
+    cursor = savedata.cursor()
     sender = ctx.message.author
     sender_id = str(sender.id)
-    sender_coins = balance_check(sender_id)
+    sender_coins = await balance_check(sender_id)
+    sender_status = await status_check(sender_id)
     receiver = discord.utils.get(client.users, name=username)
     receiver_id = str(receiver.id)
-    receiver_coins = balance_check(receiver_id)
+    receiver_coins = await balance_check(receiver_id)
+    receiver_status = await status_check(receiver_id)
 
-    if receiver is None:
-        await ctx.send("No user found with this username. Try again.")
-    elif amount > sender_coins:
-        await ctx.send("You don't have enough coins to complete this request.")
+    if sender_status == 'in':
+        if receiver_status == 'out' or 'fail':
+            await ctx.send("No active user found with this username. Try again.")
+        elif amount > sender_coins:
+            await ctx.send("You don't have enough coins to complete this request.")
+        else:
+            await ctx.send("Trade request received. Please wait.")
+            print(f'Trade request, {sender} ({sender.id}) to {receiver} ({receiver.id})')
+            new_balance_sender = int(sender_coins[0])-amount
+            cursor.execute("UPDATE econ_stats SET balance = ? WHERE user_id =?", (new_balance_sender, sender_id))
+            new_balance_receiver = int(receiver_coins[0]) + amount
+            cursor.execute("UPDATE econ_stats SET balance = ? WHERE user_id = ?", (new_balance_receiver, receiver_id))
+            await ctx.send(f"Trade successful! {sender}, your new balance is {new_balance_sender}.\n{receiver}, your new balance is {new_balance_receiver}.")
+            print(f"Trade complete. From {sender} to {receiver}, {amount} Coins.\n{sender_id} balance = {new_balance_sender}\n{receiver_id} balance = {new_balance_receiver}")
     else:
-        await ctx.send("Trade request received. Please wait.")
-        print(f'Trade request, {sender} ({sender.id}) to {receiver} ({receiver.id})')
-        new_balance_sender = int(sender_coins[0])-amount
-        cursor.execute("UPDATE econ_stats SET balance = ? WHERE user_id =?", (new_balance_sender, sender_id))
-        new_balance_receiver = int(receiver_coins[0]) + amount
-        cursor.execute("UPDATE econ_stats SET balance = ? WHERE user_id = ?", (new_balance_receiver, receiver_id))
-        await ctx.send(f"Trade successful! {sender}, your new balance is {new_balance_sender}.\n{receiver}, your new balance is {new_balance_receiver}.")
-        print(f"Trade complete. From {sender} to {receiver}, {amount} Coins.\n{sender_id} balance = {new_balance_sender}\n{receiver_id} balance = {new_balance_receiver}")
+        await ctx.send("It seems you aren't part of the game. Opt in with the 'econ.optin' command.")
 
 # command used to delete all the user data of a specified player
 @bot.command()
