@@ -35,6 +35,13 @@ with savedata:
     savedata.execute('''CREATE TABLE IF NOT EXISTS econ_stats (user_id TEXT PRIMARY KEY, balance TEXT)''')
     savedata.execute('''CREATE TABLE IF NOT EXISTS rep_stats (user_id TEXT PRIMARY KEY, reputation TEXT)''')
 
+# balance check function
+async def balance_check(player: int):
+    cursor = savedata.cursor()
+    cursor.execute("SELECT balance FROM econ_stats WHERE user_id=?", (player,))
+    balance = int(cursor.fetchone()[0])
+    return balance
+
 # optin allows players to join the game. automatically checks the database for the user
 @bot.command()
 async def optin(ctx):
@@ -78,12 +85,9 @@ async def balance(ctx):
     author = ctx.message.author
     author_id = str(author.id)
 
-    cursor = savedata.cursor()
-    cursor.execute("SELECT balance FROM econ_stats WHERE user_id=?", (author_id,))
-    coins = cursor.fetchone()
+    player_balance = balance_check(author_id)
 
-    if coins:
-        balance = coins[0]
+    if balance:
         await ctx.send(f'Your balance is: {balance} Coins.')
         print(f'Balance check: {author} = {balance}.')
     else:
@@ -116,33 +120,24 @@ async def optout(ctx):
 async def trade(ctx, username, amount: int):
     sender = ctx.message.author
     sender_id = str(sender.id)
+    sender_coins = balance_check(sender_id)
     receiver = discord.utils.get(client.users, name=username)
     receiver_id = str(receiver.id)
-    cursor = savedata.cursor()
-    cursor.execute("SELECT balance FROM econ_stats WHERE user_id=?", (sender_id,))
-    sender_coins = cursor.fetchone()
+    receiver_coins = balance_check(receiver_id)
 
     if receiver is None:
         await ctx.send("No user found with this username. Try again.")
-    elif amount > sender_coins[0]:
+    elif amount > sender_coins:
         await ctx.send("You don't have enough coins to complete this request.")
     else:
         await ctx.send("Trade request received. Please wait.")
         print(f'Trade request, {sender} ({sender.id}) to {receiver} ({receiver.id})')
         new_balance_sender = int(sender_coins[0])-amount
         cursor.execute("UPDATE econ_stats SET balance = ? WHERE user_id =?", (new_balance_sender, sender_id))
-        cursor.execute("SELECT balance FROM econ_stats WHERE user_id = ?", (receiver_id,))
-        receiver_coins = cursor.fetchone()
         new_balance_receiver = int(receiver_coins[0]) + amount
         cursor.execute("UPDATE econ_stats SET balance = ? WHERE user_id = ?", (new_balance_receiver, receiver_id))
         await ctx.send(f"Trade successful! {sender}, your new balance is {new_balance_sender}.\n{receiver}, your new balance is {new_balance_receiver}.")
         print(f"Trade complete. From {sender} to {receiver}, {amount} Coins.\n{sender_id} balance = {new_balance_sender}\n{receiver_id} balance = {new_balance_receiver}")
-
-        
-
-
-
-
 
 # command used to delete all the user data of a specified player
 @bot.command()
