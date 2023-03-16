@@ -165,9 +165,7 @@ async def deleteeverything(ctx, user_id: int):
 
     for key, value in config.items(section):
         if str(value) == author_id:
-            cursor.execute("DELETE FROM econ_stats WHERE user_id=?", (user_id,))
-            cursor.execute("DELETE FROM rep_stats WHERE user_id=?", (user_id,))
-            cursor.execute("DELETE FROM players WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM econ_stats WHERE user_id=?; DELETE FROM rep_stats WHERE user_id=?; DELETE FROM players WHERE user_id = ?;", (user_id, user_id, user_id))
             savedata.commit()
             print(f"The complete data for user: {user_id} was deleted.")
             await ctx.send("Removal request complete. All user data and history has been removed.")
