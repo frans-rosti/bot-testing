@@ -152,7 +152,7 @@ async def optout(ctx):
         print(f'User removed.')
         await ctx.send("Sorry to see you go. You can start playing again at any time with the econ.optin command. Your game data has been deleted.")
 
-# command used to delete all the user data of a specified player
+# command used to delete all the user data of a specified player.
 @bot.command()
 async def deleteeverything(ctx, user_id: int):
     author = ctx.message.author
