@@ -51,9 +51,12 @@ async def system_start():
         savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_productivity, 100))
         savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_level, 1))
         savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_experience, 1))
+        system_status = 1
     else:
-        system_status = 'Running'
-        print(f'{system_status}.')
+        system_status = 1
+        print(f'System active.')
+        
+    return system_status
 
 # balance check function
 async def balance_check(player):
@@ -173,5 +176,6 @@ async def deleteeverything(ctx, user_id: int):
             await ctx.send("You don't have the required permissions for this command. Get in touch with the administrators for further assistance.")
 
 await system_start()
+
 bot.run(TOKEN)
 
