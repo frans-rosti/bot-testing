@@ -64,6 +64,7 @@ async def start_game(ctx):
         else:
             await ctx.send("You don't have the required permissions for this command. Get in touch with the administrators for further assistance.")
 
+# used to check all system stats
 @bot.command()
 async def system_status(ctx):
     cursor = savedata.cursor()
@@ -126,6 +127,41 @@ async def remove_player():
     player_count = int(cursor.fetchone()[0]) - 1
     cursor.execute('UPDATE system SET stat_value = ? WHERE stat = ?', (player_count, 'system_player_count'))
     print(f'Player count = {player_count}.')
+
+# check the system level
+async def system_level_check():
+    cursor = savedata.cursor()
+    cursor.execute('SELECT stat_value FROM system WHERE stat = ?', ('system_level'))
+    system_level = int(cursor.fetchone()[0])
+    return system_level
+
+# check system experience
+async def system_experience_check():
+    cursor = savedata.cursor()
+    cursor.execute('SELECT stat_value FROM system WHERE stat = ?', ('system_experience'))
+    system_experience = int(cursor.fetchone()[0])
+    return system_experience
+
+# check system balance
+async def system_balance_check():
+    cursor = savedata.cursor()
+    cursor.execute('SELECT stat_value FROM system WHERE stat = ?', ('system_balance'))
+    system_balance = int(cursor.fetchone()[0])
+    return system_balance
+
+# check system productivity
+async def system_productivity_check():
+    cursor = savedata.cursor()
+    cursor.execute('SELECT stat_value FROM system WHERE stat = ?', ('system_productivity'))
+    system_productivity = int(cursor.fetchone()[0])
+    return system_productivity
+
+# check system player count
+async def system_player_count_check():
+    cursor = savedata.cursor()
+    cursor.execute('SELECT stat_value FROM system WHERE stat = ?', ('system_player_count'))
+    system_player_count = int(cursor.fetchone()[0])
+    return system_player_count
 
 # optin allows players to join the game. automatically checks the database for the user
 @bot.command()
