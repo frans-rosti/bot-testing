@@ -46,11 +46,12 @@ async def system_start():
     system_status_check = cursor.fetchone()
     if system_status_check is None:
         print('System initialized')
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_status, 1))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_balance, 1000000))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_productivity, 100))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_level, 1))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_experience, 1))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_status', 1))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_balance', 1000000))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_productivity', 100))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_level', 1))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_experience', 1))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_player_count', 0))
         system_status = 1
     else:
         system_status = 1
@@ -83,6 +84,14 @@ async def status_check(player):
 
     return status_check
 
+# add one to the player count
+async def add_player():
+    cursor = savedata.cursor()
+    cursor.execute('SELECT stat_value FROM system WHERE stat = system_player_count')
+    player_count = int(cursor.fetchone()[0]) + 1
+    cursor.execute('UPDATE system SET stat_value = ? WHERE stat = system_player_count', (player_count,))
+    print(f'Player count = {player_count}.')
+
 # optin allows players to join the game. automatically checks the database for the user
 @bot.command()
 async def optin(ctx):
@@ -98,6 +107,7 @@ async def optin(ctx):
         savedata.execute('INSERT INTO econ_stats (user_id, balance) VALUES (?, ?)', (author_id, starting_cash))
         savedata.execute('INSERT INTO rep_stats (user_id, reputation) VALUES (?, ?)', (author_id, starting_rep))
         savedata.execute('INSERT INTO players (user_id, status) VALUES (?, ?)', (author_id, "in"))
+        await add_player()
         savedata.commit()
         print(f'User was added:\nUsername: {author}\nID: {author_id}')
         await ctx.send(f'Welcome to the System! Your complementary coins have been automatically deposited to your account.\nYou can check your balance at any time with the "econ.balance" command.')
