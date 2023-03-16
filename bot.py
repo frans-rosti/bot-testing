@@ -37,6 +37,23 @@ with savedata:
     savedata.execute('''CREATE TABLE IF NOT EXISTS players (user_id TEXT PRIMARY KEY, status TEXT)''')
     savedata.execute('''CREATE TABLE IF NOT EXISTS econ_stats (user_id TEXT PRIMARY KEY, balance TEXT)''')
     savedata.execute('''CREATE TABLE IF NOT EXISTS rep_stats (user_id TEXT PRIMARY KEY, reputation TEXT)''')
+    savedata.execute('''CREATE TABLE IF NOT EXISTS system (stat TEXT PRIMARY KEY, stat_value TEXT)''')
+
+# system status check - if already set up, 
+async def system_start():
+    cursor = savedata.cursor()
+    cursor.execute("SELECT stat_value FROM system WHERE stat = ?", ('system_status',))
+    system_status_check = cursor.fetchone()
+    if system_status_check is None:
+        print('System initialized')
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_status, 1))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_balance, 1000000))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_productivity, 100))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_level, 1))
+        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', (system_experience, 1))
+    else:
+        system_status = 'Running'
+        print(f'{system_status}.')
 
 # balance check function
 async def balance_check(player):
@@ -122,7 +139,7 @@ async def optout(ctx):
     if player_status == 'fail':
         await ctx.send("You can't opt out, you haven't even started! Use 'econ.optin' to start playing.")
     elif player_status == 'out':
-        await ctx.send("You've already opted out.")
+        await ctx.send("You have already opted out.")
     else:
         print(f'Opt out request:\nUser: {author}\nID: {author_id}')
         cursor.execute("DELETE FROM econ_stats WHERE user_id=?", (author_id,))
@@ -131,37 +148,6 @@ async def optout(ctx):
         savedata.commit()
         print(f'User removed.')
         await ctx.send("Sorry to see you go. You can start playing again at any time with the econ.optin command. Your game data has been deleted.")
-
-# trading - allows users to trade coins amongst each other
-@bot.command()
-async def trade(ctx, username, amount: int):
-    client = discord.Client(intents=intents)
-    cursor = savedata.cursor()
-    sender = ctx.message.author
-    sender_id = str(sender.id)
-    sender_coins = await balance_check(sender_id)
-    sender_status = await status_check(sender_id)
-    receiver = discord.utils.get(client.users, name=username)
-    receiver_id = str(receiver.id)
-    receiver_coins = await balance_check(receiver_id)
-    receiver_status = await status_check(receiver_id)
-
-    if sender_status == 'in':
-        if receiver_status == 'out' or 'fail':
-            await ctx.send("No active user found with this username. Try again.")
-        elif amount > sender_coins:
-            await ctx.send("You don't have enough coins to complete this request.")
-        else:
-            await ctx.send("Trade request received. Please wait.")
-            print(f'Trade request, {sender} ({sender.id}) to {receiver} ({receiver.id})')
-            new_balance_sender = int(sender_coins[0])-amount
-            cursor.execute("UPDATE econ_stats SET balance = ? WHERE user_id =?", (new_balance_sender, sender_id))
-            new_balance_receiver = int(receiver_coins[0]) + amount
-            cursor.execute("UPDATE econ_stats SET balance = ? WHERE user_id = ?", (new_balance_receiver, receiver_id))
-            await ctx.send(f"Trade successful! {sender}, your new balance is {new_balance_sender}.\n{receiver}, your new balance is {new_balance_receiver}.")
-            print(f"Trade complete. From {sender} to {receiver}, {amount} Coins.\n{sender_id} balance = {new_balance_sender}\n{receiver_id} balance = {new_balance_receiver}")
-    else:
-        await ctx.send("It seems you aren't part of the game. Opt in with the 'econ.optin' command.")
 
 # command used to delete all the user data of a specified player
 @bot.command()
@@ -186,5 +172,6 @@ async def deleteeverything(ctx, user_id: int):
         else:
             await ctx.send("You don't have the required permissions for this command. Get in touch with the administrators for further assistance.")
 
+await system_start()
 bot.run(TOKEN)
 
