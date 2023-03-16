@@ -39,25 +39,52 @@ with savedata:
     savedata.execute('''CREATE TABLE IF NOT EXISTS rep_stats (user_id TEXT PRIMARY KEY, reputation TEXT)''')
     savedata.execute('''CREATE TABLE IF NOT EXISTS system (stat TEXT PRIMARY KEY, stat_value TEXT)''')
 
-# system status check - if already set up, 
-async def system_start():
+# used to start the game on a server.
+@bot.command()
+async def start_game(ctx):
+    author = ctx.message.author
+    author_id = str(author.id)
+    section = 'admins'
+
+    for key, value in config.items(section):
+        if str(value) == author_id:
+            if await game_status() == False:
+                print('System initialized')
+                savedata.execute('''CREATE TABLE IF NOT EXISTS system (stat TEXT PRIMARY KEY, stat_value TEXT)''')
+                savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_status', 1))
+                savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_balance', 1000000))
+                savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_productivity', 100))
+                savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_level', 1))
+                savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_experience', 1))
+                savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_player_count', 0))
+                savedata.commit()
+                system_status = 1
+            else: 
+                await ctx.send("Game is already running.")
+        else:
+            await ctx.send("You don't have the required permissions for this command. Get in touch with the administrators for further assistance.")
+
+@bot.command()
+async def system_status(ctx):
+    cursor = savedata.cursor()
+    cursor.execute('SELECT * FROM system')
+    rows = cursor.fetchall()
+    for row in rows:
+        await ctx.send(f'{row}')
+
+
+# used to check if the game has been started
+async def game_status():
     cursor = savedata.cursor()
     cursor.execute("SELECT stat_value FROM system WHERE stat = ?", ('system_status',))
-    system_status_check = cursor.fetchone()
-    if system_status_check is None:
-        print('System initialized')
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_status', 1))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_balance', 1000000))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_productivity', 100))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_level', 1))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_experience', 1))
-        savedata.execute('INSERT INTO system (stat, stat_value) VALUES (?, ?)', ('system_player_count', 0))
-        system_status = 1
+    game_status_check = cursor.fetchone()
+
+    if game_status_check and game_status_check[0] == '1':
+        game_status = True
     else:
-        system_status = 1
-        print(f'System active.')
-        
-    return system_status
+        game_status = False
+    
+    return game_status
 
 # balance check function
 async def balance_check(player):
@@ -87,9 +114,17 @@ async def status_check(player):
 # add one to the player count
 async def add_player():
     cursor = savedata.cursor()
-    cursor.execute('SELECT stat_value FROM system WHERE stat = system_player_count')
+    cursor.execute('SELECT stat_value FROM system WHERE stat = ?', ('system_player_count',))
     player_count = int(cursor.fetchone()[0]) + 1
-    cursor.execute('UPDATE system SET stat_value = ? WHERE stat = system_player_count', (player_count,))
+    cursor.execute('UPDATE system SET stat_value = ? WHERE stat = ?', (player_count, 'system_player_count'))
+    print(f'Player count = {player_count}.')
+
+# remove one player from the count
+async def remove_player():
+    cursor = savedata.cursor()
+    cursor.execute('SELECT stat_value FROM system WHERE stat = ?', ('system_player_count',))
+    player_count = int(cursor.fetchone()[0]) - 1
+    cursor.execute('UPDATE system SET stat_value = ? WHERE stat = ?', (player_count, 'system_player_count'))
     print(f'Player count = {player_count}.')
 
 # optin allows players to join the game. automatically checks the database for the user
@@ -118,6 +153,7 @@ async def optin(ctx):
         savedata.execute('INSERT INTO econ_stats (user_id, balance) VALUES (?, ?)', (author_id, return_cash))
         savedata.execute('INSERT INTO rep_stats (user_id, reputation) VALUES (?, ?)', (author_id, return_rep))
         cursor.execute("UPDATE players SET status = ? WHERE user_id = ?", ('in', author_id))
+        await add_player()
         savedata.commit()
         await ctx.send('Welcome back! The System missed you. You have been given some coins to welcome your return.')
 
@@ -158,6 +194,7 @@ async def optout(ctx):
         cursor.execute("DELETE FROM econ_stats WHERE user_id=?", (author_id,))
         cursor.execute("DELETE FROM rep_stats WHERE user_id=?", (author_id,))
         cursor.execute("UPDATE players SET status = ? WHERE user_id = ?", ('out', author_id))
+        await remove_player()
         savedata.commit()
         print(f'User removed.')
         await ctx.send("Sorry to see you go. You can start playing again at any time with the econ.optin command. Your game data has been deleted.")
@@ -175,15 +212,16 @@ async def deleteeverything(ctx, user_id: int):
 
     for key, value in config.items(section):
         if str(value) == author_id:
-            cursor.execute("DELETE FROM econ_stats WHERE user_id=?; DELETE FROM rep_stats WHERE user_id=?; DELETE FROM players WHERE user_id = ?;", (user_id, user_id, user_id))
+            cursor.execute("DELETE FROM econ_stats WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM rep_stats WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM players WHERE user_id = ?", (user_id,))
+            await remove_player()
             savedata.commit()
             print(f"The complete data for user: {user_id} was deleted.")
             await ctx.send("Removal request complete. All user data and history has been removed.")
 
         else:
             await ctx.send("You don't have the required permissions for this command. Get in touch with the administrators for further assistance.")
-
-await system_start()
 
 bot.run(TOKEN)
 
